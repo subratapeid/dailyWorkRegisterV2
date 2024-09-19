@@ -5,7 +5,7 @@
 
     <style>
         body {
-            width: 400px;
+            width: 200px;
             padding: 10px;
         }
         .progress-container {
@@ -36,7 +36,7 @@
 </head>
 <body>
     <h3>Form Automation</h3>
-<div id="processSection">
+<div id="processSection" style="display: none;">
     <!-- Progress Bar Section -->
 <div class="progress-container">
     <div id="progress-bar" class="progress-bar">0/0 (0%)</div>
@@ -48,7 +48,9 @@
 </div>
 
 <div id="error-message" style="display: none; color: red;"></div>
-<button id="login" style="display: none;">Login</button>
+<p id="status" style="display: none;">Checking Login Status. Please Wait</p>
+<button id="login">Login</button>
+<button id="logout" style="display: none;">Logout</button>
     <script src="popup.js"></script>
 </body>
 </html>

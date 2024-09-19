@@ -1,0 +1,25 @@
+<script>
+    function verifyToken(token) {
+        // Replace with your token verification endpoint
+        const verifyTokenUrl = `https://yourdomain.com/verify-token?token=${token}`;
+
+        return fetch(verifyTokenUrl, { credentials: 'include' })
+            .then(response => response.json())
+            .then(data => {
+                return {
+                    status: data.status === 'success', // true if success, false otherwise
+                    message: data.message || 'Unknown error occurred' // fallback message if none is provided
+                };
+            })
+            .catch(error => {
+                return {
+                    status: false,
+                    message: 'Error verifying token: ' + error.message
+                };
+            });
+    }
+
+    verifyToken(123456789)
+        .then(result => console.log(result))
+        .catch(error => console.error('Error:', error));
+</script>
