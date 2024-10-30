@@ -42,7 +42,7 @@ function processForms() {
         }
 
         if (formData && currentIndex < formData.length) {
-            const randomDelay = getRandomDelay(0, 0); // Random delay between 3 and 10 seconds
+            const randomDelay = getRandomDelay(1, 1); // Random delay between 3 and 10 seconds
 
             console.log(`Processing record ${currentIndex + 1} with a delay of ${randomDelay / 1000} seconds`);
 
