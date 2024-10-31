@@ -4,25 +4,49 @@ document.addEventListener('DOMContentLoaded', () => {
     populateProfileOptions(); // Populate profile names on load
 
 });
+// Retrieve userId from local storage
+// chrome.storage.local.get('userId', (result) => {
+//     const userId = result.userId;
+//     if (userId) {
+//         console.log("Retrieved userId from Chrome storage:", userId);
+//     } else {
+//         console.log("No userId found in Chrome storage.");
+//     }
+// });
 
+const errorElement = document.getElementById('error-message');
 function checkLoginStatus() {
     // Fetch the token from cookies and check login status
-    chrome.storage.local.get(['tempToken', 'authToken'], function(tokens) {
+    chrome.storage.local.get(['tempToken', 'authToken', 'userFirstName'], function(tokens) {
         if (!tokens.authToken && tokens.tempToken) {
             document.getElementById('status').style.display = 'block';
             document.getElementById('login').disabled = true;
-            console.log('verifying temp Token');
-            console.log(`Temp Token: ${tokens.tempToken}`);
+            // console.log('verifying temp Token');
+            // console.log(`Temp Token: ${tokens.tempToken}`);
             
-            // Make an API request to verify the token
-            verifyToken(tokens.tempToken)
+            // Make an API request to verify the temp token
+            verifyToken('tempToken', tokens.tempToken)
                 .then(result => {
+                    chrome.storage.local.get('userFirstName', (result) => {
+                        const userFirstName = result.userFirstName || 'User';
+                        if(userFirstName){
+                            document.getElementById('userFirstName').textContent = userFirstName;
+                        }
+                        // console.log(userFirstName);
+                    });
+
                 document.getElementById('status').style.display = 'none';
                 document.getElementById('login').disabled = false;
                 console.log(`Result: ${result.message}`);
+                console.log(`Result: ${result.status}`);
                     if (result.status) {
                         chrome.storage.local.remove('tempToken');
-                        chrome.storage.local.set({ authToken: result.message });
+                        chrome.storage.local.get('userFirstName', (result) => {
+                            const userFirstName = result.userFirstName;
+                            userFirstName.textContent = userFirstName;
+                            // console.log(userFirstName);
+                            
+                        });
                         document.getElementById('processSection').style.display = 'block';
                         document.getElementById('logout').style.display = 'block';
                         document.getElementById('login').style.display = 'none';
@@ -43,33 +67,73 @@ function checkLoginStatus() {
                     document.getElementById('login').style.display = 'block';
                 });
             } else if(!tokens.authToken && !tokens.tempToken) {
-                // Auth token Available, show Progress section
+                // Auth token temp token not Available, hide Progress section
                 document.getElementById('processSection').style.display = 'none';
                 document.getElementById('logout').style.display = 'none';
                 document.getElementById('login').style.display = 'block';
             } else {
+                chrome.storage.local.get('userFirstName', (result) => {
+                    const userFirstName = result.userFirstName || 'User';
+                    if(userFirstName){
+                        document.getElementById('userFirstName').textContent = userFirstName;
+                    }
+                    // console.log(userFirstName);
+                });
             console.log(`Auth Token: ${tokens.authToken}`);
             // Auth token Available, show Progress section
             document.getElementById('processSection').style.display = 'block';
             document.getElementById('logout').style.display = 'block';
             document.getElementById('login').style.display = 'none';
+
+            // Make an API request to verify the auth token
+            verifyToken('authToken', tokens.authToken)
+                .then(result => {
+                document.getElementById('status').style.display = 'none';
+                document.getElementById('login').disabled = false;
+                console.log(`Result: ${result}`);
+                    if (result.status) {
+                        chrome.storage.local.remove('tempToken');
+                        // chrome.storage.local.set({ authToken: result.message });
+                        // chrome.storage.local.get('userFirstName', (result) => {
+                        //     const userFirstName = result.userFirstName;
+                        //     document.getElementById('userFirstName').textContent = userFirstName;
+                        //     // console.log(userFirstName);
+                        // });
+                        document.getElementById('processSection').style.display = 'block';
+                        document.getElementById('logout').style.display = 'block';
+                        document.getElementById('login').style.display = 'none';
+                    } else {
+                        displayError(result.message);
+                        // chrome.storage.local.set({
+                        //     authToken: false,
+                        //     tempToken: false
+                        // });
+                        document.getElementById('processSection').style.display = 'none';
+                        document.getElementById('logout').style.display = 'none';
+                        document.getElementById('login').style.display = 'block';
+                    }
+                })
         }
     });
 }
 
-function verifyToken(token) {
+function verifyToken(tokenType, token) {
     
     // Temp token verification endpoint
-    const verifyTokenUrl = `https://script.google.com/macros/s/AKfycbxQXNRkCB9Vxn_3nqf8hXdDOwCSrVkbIB2MPVYyUnAvGPCt5cb1xoTSjVjbm9061Q_Vcw/exec?tempToken=${token}`;
+    const verifyTokenUrl = `https://script.google.com/macros/s/AKfycbxQXNRkCB9Vxn_3nqf8hXdDOwCSrVkbIB2MPVYyUnAvGPCt5cb1xoTSjVjbm9061Q_Vcw/exec?tokenType=${tokenType}&token=${token}`;
 
     return fetch(verifyTokenUrl)
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
+                    // console.log('after Verify:'+ data.data.Login_Session_Token);
+                    chrome.storage.local.set({ authToken: data.data.Login_Session_Token });
+                    chrome.storage.local.set({ userId: data.data.User_Id });
+                    chrome.storage.local.set({ userFirstName: data.data.User_First_Name });
                     // Return success message and token
                     return {
                         status: true,
-                        message: data.data.Login_Session_Token || 'Login Session Token not available'
+                        message: data.data.Login_Session_Token|| 'Token Verified'
                     };
                 } else {
                     // Return actual error message from response
@@ -91,9 +155,10 @@ function verifyToken(token) {
 document.getElementById('login').addEventListener('click', () => {
     // Generate a temporary token and redirect to login page
     const tempToken = generateTempToken();
+    const appName = 'Daily Activity Entry Extention';
     // chrome.storage.local.remove('authToken');
     chrome.storage.local.set({ tempToken: tempToken }, () => {
-        const loginUrl = `https://subratap.gitlab.io/tools/index.html?token=${tempToken}`;
+        const loginUrl = `https://subratap.gitlab.io/tools/index.html?page=authenticate&token=${tempToken}&app=${appName}`;
         chrome.tabs.create({ url: loginUrl });
     });
 });
@@ -110,7 +175,8 @@ document.getElementById('logout').addEventListener('click', () => {
 
         chrome.storage.local.set({
             authToken: false,
-            tempToken: false
+            tempToken: false,
+            userFirstName: false
         });
     }
 });
@@ -121,7 +187,8 @@ function generateTempToken() {
 
 // Populate profile names in dropdown
 function populateProfileOptions() {
-    fetchProfiles('1').then(response => {
+    chrome.storage.local.get('userId', (result) => {
+    fetchProfiles(result.userId).then(response => {
         const profileSelect = document.getElementById('profileSelect');
         profileSelect.innerHTML = ''; // Clear existing options
 
@@ -153,6 +220,7 @@ function populateProfileOptions() {
         console.error('Error fetching profiles:', error);
         // Optionally handle fetch errors
     });
+})
 }
 
 
@@ -179,54 +247,56 @@ function fetchProfiles(userId) {
         });
 }
 
-// Call fetchProfiles with a specific userId
-// fetchProfiles(1).then(profiles => {
-//     const profileSelect = document.getElementById('profileSelect');
-//     profiles.forEach(profile => {
-//         const option = document.createElement('option');
-//         option.value = profile;
-//         option.textContent = profile;
-//         profileSelect.appendChild(option);
-//     });
-// });
-
-
 // Count remarks as user types
 document.getElementById('remarksInput').addEventListener('input', () => {
     const remarks = document.getElementById('remarksInput').value.split('\n').filter(line => line.trim() !== '');
     document.getElementById('remarksCount').textContent = `Remarks Count: ${remarks.length}`;
 });
+
+const startBtn = document.getElementById('start');
+const stopBtn = document.getElementById('stop');
+
 // Event listener for start button
-document.getElementById('start').addEventListener('click', async () => {
+startBtn.addEventListener('click', async () => {
     try {
-        const profileName = document.getElementById('profileSelect').value;
+    const profileName = document.getElementById('profileSelect').value;
     const remarks = document.getElementById('remarksInput').value.split('\n').filter(line => line.trim() !== '');
     const remarksCount = remarks.length;
-        // Assuming remarks array is defined like this:
-// const remarks = [
-//     'Remark 1 for Manish Kumar', 
-//     'Remark 2 for Rohan Deshmukh', 
-//     'Remark 3 for Dheeraj Mishra',
-//     'Remark 4 for Dheeraj Mishra (ATYATHI)',
-//     'Remark 5 for Smriti Sharma'
-// ];
-// const profileName = 'My Work';
-const userId = 1;
-// const remarksCount = 5;
-// Fetch All Activity List from the sheet
-const dataUrl = `https://script.google.com/macros/s/AKfycbxkF2fW2S5afoFjjhYuxTBRTAcUxk-p2b-a11pJpFO1MVsGwh80XGH1-PuPpcCqUl94Aw/exec?userId=${userId}&profileName=${profileName}&remarksCount=${remarksCount}`;
-console.log(dataUrl);
+    startBtn.disabled=true;
+    stopBtn.disabled=false;
+    errorElement.style.display = 'none';
+    if (!validation()){
+        startBtn.disabled=false;
+        stopBtn.disabled=true;
+        return
+    };
+    function validation() {
+        if(profileName==''){
+           displayError('Please Select A Profile');
+           return false;
+        }else if(remarksCount==0){
+            displayError('Please Enter Your Remarks');
+            return false;
+        } else {
+            return true;
+        }
+    }
+    chrome.storage.local.get('userId', (result) => {
+        const userId = result.userId;
+        // Fetch All Activity data from the sheet
+        const dataUrl = `https://script.google.com/macros/s/AKfycbxkF2fW2S5afoFjjhYuxTBRTAcUxk-p2b-a11pJpFO1MVsGwh80XGH1-PuPpcCqUl94Aw/exec?userId=${userId}&profileName=${profileName}&remarksCount=${remarksCount}`;
+        console.log(dataUrl);
 
-fetch(dataUrl)
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success' && Array.isArray(data.data)) {
+        fetch(dataUrl)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success' && Array.isArray(data.data)) {
 
-            // Map remarks with data and log to console
-            const finalData = data.data.map((item, index) => {
-                // Append remarks to each item without altering the original structure
-                return { ...item, Remarks: remarks[index] || 'No Remarks' };
-            });
+                    // Map remarks with data and log to console
+                    const finalData = data.data.map((item, index) => {
+                        // Append remarks to each item without altering the original structure
+                        return { ...item, Remarks: remarks[index] || 'No Remarks' };
+                    });
 
             // Log the entire final array with remarks at once
             console.log(finalData);
@@ -252,19 +322,23 @@ fetch(dataUrl)
 
             })
             .catch(error => displayError('Error fetching form data'));
+        });
     } catch (error) {
         displayError('Error: ' + error.message);
         console.error('Error:', error.message);
     }
+    
 });
 
-document.getElementById('stop').addEventListener('click', () => {
+stopBtn.addEventListener('click', () => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         chrome.tabs.sendMessage(tabs[0].id, { action: 'stopProcessing' });
     });
 });
 
 function updateProgress(submittedCount, totalCount) {
+    startBtn.disabled=true;
+    stopBtn.disabled=false;
     const progressBar = document.getElementById('progress-bar');
     const progressPercentage = (submittedCount / totalCount) * 100;
     
@@ -276,7 +350,8 @@ function updateProgress(submittedCount, totalCount) {
 
 function resetProgress() {
     const progressBar = document.getElementById('progress-bar');
-    
+    startBtn.disabled=false;
+    stopBtn.disabled=true;
     if (progressBar) {
         progressBar.style.width = '0%';
         progressBar.innerText = '0/0 (0%)';
@@ -291,36 +366,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 });
 
-function fetchSheetUrl() {
-    return new Promise((resolve, reject) => {
-        chrome.storage.local.get('authToken', (token) => {
-            const sheetUrlEndpoint = `https://script.google.com/macros/s/AKfycbxQXNRkCB9Vxn_3nqf8hXdDOwCSrVkbIB2MPVYyUnAvGPCt5cb1xoTSjVjbm9061Q_Vcw/exec?action=sheetUrl&authToken=${token.authToken}`;
-
-            fetch(sheetUrlEndpoint)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        if(!data.data.Sheet_Url==''){
-                            resolve(data.data.Sheet_Url); // Resolve the promisse
-                        }else{
-                            displayError('Your Sheet Is Not Configured')
-                        }
-                        
-                    } else {
-                        reject(new Error(data.message || 'Failed to fetch sheet URL'));
-                    }
-                })
-                .catch(error => {
-                    displayError('Error fetching sheet URL: ' + error.message);
-                    reject(error); // Reject the promise with the error
-                });
-        });
-    });
-}
-
 
 function displayError(message) {
-    const errorElement = document.getElementById('error-message');
+    
     if (errorElement) {
         errorElement.innerText = message;
         errorElement.style.display = 'block';
